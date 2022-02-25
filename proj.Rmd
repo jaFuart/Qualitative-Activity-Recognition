@@ -1,0 +1,96 @@
+---
+title: "Qualitative Activity Recognition"
+author: "Shevarev, M.V."
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Background
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: [Human Activity Recognition](http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har).  
+*see the section on the Weight Lifting Exercise Dataset.
+
+### Data
+
+The training data for this project are available here:  
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here:  
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+The data for this project come from this source:   http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har. If you use the document you create for this class for any purpose please cite them as they have been very generous in allowing their data to be used for this kind of assignment.
+
+```{r, echo=FALSE, results = "hide", warning=FALSE,  message=FALSE} 
+# Load the necessary libraries
+library(caret)
+library(randomForest)
+```
+
+### Cleaning the data
+
+```{r}
+#download the data
+url1 <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+url2 <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+download.file(url1, "training.csv")
+download.file(url2, "testing.csv")
+trainig <- read.csv("training.csv")
+testing <- read.csv("testing.csv")
+
+#get information about the data
+dim(trainig)
+names(trainig)
+
+#remove columns that have NA values more than 0.5 of total values
+ncol <- colSums(is.na(trainig))<nrow(trainig)/2
+trainig <- trainig[,ncol]
+testing <- testing[,ncol]
+emptycol <- colSums(trainig!="")>nrow(trainig)/2
+trainig <- trainig[,emptycol]
+testing <- testing[,emptycol]
+
+#remove the non-informative features
+trainig <- trainig[,-c(1:7)]
+testing <- testing[,-c(1:7)]
+
+#filter out highly correlated predictors
+filter<-preProcess(trainig, method = "corr")
+trainig <- predict(filter, trainig)
+testing <- predict(filter, testing)
+
+#the data set in this step
+dim(trainig)
+```
+
+### Training and prediction
+
+```{r}
+#split the data into training and validation
+set.seed(1337)
+inTrain <- createDataPartition(trainig$classe, p = 0.6, list = FALSE)
+Training <- trainig[inTrain,]
+Testing <- trainig[-inTrain,]
+
+#using randomforest algorithm and 3 folds
+rf <- trainControl(method="cv", number=3, verboseIter=FALSE)
+trainingModel <- train(classe ~ ., data=Training, method="rf",trControl=rf)
+trainingModel$finalModel
+
+#prediction
+predict <- predict(trainingModel, Testing)
+cm <-confusionMatrix(factor(Testing$classe), factor(predict))
+
+#the validation accuracy
+cm$overall['Accuracy']
+
+#error
+1 - cm$overall['Accuracy']
+```
+
+### Use the Prediction Model on the validation data
+```{r}
+predict(trainingModel, testing)
+```
